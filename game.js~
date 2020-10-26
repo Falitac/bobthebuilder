@@ -1,0 +1,233 @@
+// @author Konrad Filek
+// Game or something
+//
+
+// Globals
+
+
+window.addEventListener('keyup', function(event) { Key.onKeyup(event); }, false);
+window.addEventListener('keydown', function(event) { Key.onKeydown(event); }, false);
+
+// Utility classes 
+
+var Key = {
+	_pressed: {},
+
+	isDown: function(keyCode) {
+		return this._pressed[keyCode];
+	},
+
+	onKeydown: function(event) {
+		this._pressed[event.keyCode] = true;
+	},
+
+	onKeyup: function(event) {
+		delete this._pressed[event.keyCode];
+	}
+};
+
+
+class Clock {
+	constructor() {
+		this.startTime = 0.0;
+		this.reset();
+	}
+
+	reset() {
+		this.startTime = Date.now();
+	}
+
+	getElapsedTime() {
+		return (Date.now() - this.startTime) / 1000;
+	}
+}
+
+class Sound {
+	constructor(src) {
+		this.sound = document.createElement("audio");
+		this.sound.src = src;
+		this.sound.setAttribute("preload", "auto");
+		this.sound.setAttribute("controls", "none");
+		this.sound.style.display = "none";		
+		document.body.appendChild(this.sound);
+	}
+	play() {
+		this.sound.play();
+	}
+	stop() {
+		this.sound.pause();
+	}
+}
+
+// Game classes
+
+class Stonoga {
+	constructor() {
+		this.x = 100;
+		this.y = 100;
+		this.img = new Image();
+		this.img.src = 'resources/stonoga.png';
+		this.ziobroSound = new Sound('resources/ziobro-kurwo.mp3');
+
+	}
+	update(time) {
+		if(68 in Key._pressed) {
+			this.x += 10.0;
+		}
+		if(65 in Key._pressed) {
+			this.x -= 10.0;
+		}
+		if(87 in Key._pressed) {
+			this.y -= 10.0;
+		}
+		if(83 in Key._pressed) {
+			this.y += 10.0;
+		}
+		if(32 in Key._pressed) {
+			this.ziobroSound.play();
+		}
+	}
+
+	draw() {
+		globalContext.drawImage(this.img, this.x, this.y, 128, 128);
+	}
+}
+
+function addTileTexture(name) {
+	tileTextures.push(name);
+}
+
+class Tile {
+	constructor(id = 0) {
+		this.id = id;
+	}
+}
+
+class Grid {
+	constructor(x = 0, y = 0, tileCountWidth = 16) {
+		this.tiles = [];
+		this.tileSize = 64;
+		this.tileCountWidth = tileCountWidth;
+		this.gridSize = this.tileSize*tileCountWidth;
+		this.x = x;
+		this.y = y;
+		for(let i = 0; i < this.tileCountWidth*this.tileCountWidth; i++) {
+			this.tiles.push(new Tile());
+		}
+	}
+
+	draw() {
+		for(let i = 0; i < this.tiles.length; i++) {
+			let actualTile = this.tiles[i];
+			let xTile =            i%this.tileCountWidth;
+			let yTile = Math.floor(i/this.tileCountWidth);
+			globalContext.drawImage(
+				tileTextures[actualTile.id],
+				this.gridSize*this.x + this.tileSize*xTile,
+				this.gridSize*this.y + this.tileSize*yTile,
+				this.tileSize,
+				this.tileSize
+			);
+		}
+	}
+}
+
+class World {
+	constructor() {
+		this.grids = [];
+		for(let i = -2; i <= 2; i++) {
+			for(let j = -2; j <= 2; j++) {
+				this.grids.push(new Grid(i, j));
+			}
+		}
+	}
+
+	draw() {
+		for(let i = 0; i < this.grids.length; i++) {
+			this.grids[i].draw();
+		}
+	}
+}
+
+let canvasElement = null;
+let globalContext = null;
+let canvasClearColor = '#000';
+let frameTime = 0.01;
+let displayedFrameTime = frameTime;
+let lastFrameTime = 0.0;
+let frameUpdateClock = new Clock();
+
+let stonoga = null;
+let cash = 100;
+var tileTextures = [];
+let testWorld;
+
+// Functions
+
+function init() {
+	canvasElement = document.querySelector('#canvas');
+	globalContext = canvasElement.getContext('2d');
+	resizeCanvas();
+	frameUpdateClock.reset();
+
+	stonoga = new Stonoga();
+
+	addTileTexture('resources/grass.png');
+	testWorld = new World();
+}
+
+function resizeCanvas() {
+	canvas.width = window.innerWidth;
+	canvas.height = window.innerHeight;
+}
+
+function clearCanvas() {
+	globalContext.fillStyle = canvasClearColor;
+	globalContext.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function displayFrameTime() {
+	globalContext.font = '30px Arial';
+	globalContext.fillStyle = '#fff';
+	globalContext.fillText(`Frame time: ${roundToNPlace(frameTime, 2)}` , 50, 50);
+}
+
+// Utility
+
+function roundToNPlace(number, place) {
+	let placeFactor = Math.pow(10, place);
+	return Math.round((displayedFrameTime + Number.EPSILON) * placeFactor) / placeFactor;
+}
+
+function addTileTexture(src) {
+	tileTextures.push(new Image());
+	tileTextures[tileTextures.length - 1].src = src;
+}
+
+function mainLoop(time) {
+	// Frame timing
+	frameTime = time - lastFrameTime;
+	lastFrameTime = time;
+	stonoga.update();
+	//console.log(Key._pressed);
+
+	// Debug draw stuff
+	clearCanvas();
+	if(frameUpdateClock.getElapsedTime() > 1.0) {
+		displayedFrameTime = frameTime;
+		frameUpdateClock.reset();
+	}
+
+	// Game draw stuff
+	
+	testWorld.draw();
+	stonoga.draw();
+	displayFrameTime();
+
+	requestAnimationFrame(mainLoop);
+}
+
+// Main code
+
+init();
+mainLoop();
