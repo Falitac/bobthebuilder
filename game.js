@@ -1,3 +1,7 @@
+// @author Konrad Filek
+// I do not own
+
+// Event listeners
 
 window.addEventListener('keyup', event => {
 	Key.onKeyup(event);
@@ -141,7 +145,6 @@ var Key = {
 	}
 
 };
-let hehe_hehe;
 
 var Mouse = {
 	x: 0,
@@ -173,7 +176,7 @@ let lastFrameTime = 0.0;
 let frameUpdateClock = new Clock();
 
 let board = null;
-let boardSize = 8;
+let boardSize = 7;
 let tileSize = 40;
 let boardPos = {
 	x: 0,
@@ -215,11 +218,9 @@ let bobVelocities = [
 ];
 
 let bobActualMove = 0;
-
 let bobClock = new Clock();
 let bobMoving = false;
-
-let bobInterval = 0.01;
+let bobInterval = 0.25;
 
 let aClicked = false;
 let spaceClicked = false;
@@ -270,6 +271,18 @@ function getRandInt(a, b) {
 	return Math.floor(Math.random() * (b - a + 1)) + a;
 }
 
+function getCoord(p, start) {
+	return start + p * tileSize;
+}
+
+function getReverseCoord(p, start) {
+	return Math.floor((p - start) / tileSize);
+}
+
+function coordWithinBoard(x, y) {
+	return 0 <= x && x < boardSize && 0 <= y && y < boardSize;
+}
+
 function resetBoard() {
 	board = [...Array(boardSize)].map(element => [...Array(boardSize)].fill(0));
 	bobPos.x = Math.floor(boardSize / 2);
@@ -278,35 +291,84 @@ function resetBoard() {
 	bobActualMove = 0;
 }
 
-function mainLoop(time) {
-	// Frame timing
-	frameTime = time - lastFrameTime;
-	lastFrameTime = time;
-	//console.log(Key._pressed);
+function displayTiles() {
+	for(let y = 0; y < boardSize; y++) {
+		for(let x = 0; x < boardSize; x++) {
+			let destX = getCoord(x, boardPos.x);
+			let destY = getCoord(y, boardPos.y);
+			globalContext.drawImage(images.tile, destX, destY, tileSize, tileSize);
+		}
+	}
+}
 
-	// Debug draw stuff
-	clearCanvas();
-	if(frameUpdateClock.getElapsedTime() > 1.0) {
-		displayedFrameTime = frameTime;
-		frameUpdateClock.reset();
+function displayObstacles(xCoord, yCoord) {
+	for(let y = 0; y < boardSize; y++) {
+		for(let x = 0; x < boardSize; x++) {
+			if(board[y][x] === 1) {
+				let destX = getCoord(x, boardPos.x) + getRandInt(-1, 1);
+				let destY = getCoord(y, boardPos.y) + getRandInt(-2, 2);
+				globalContext.drawImage(images.dizzy, destX, destY, tileSize, tileSize);
+			}
+		}
+	}
+}
+
+function displayBob(xCoord, yCoord) {
+	globalContext.drawImage(
+		images.bob,
+		getCoord(bobPos.x, boardPos.x),
+		getCoord(bobPos.y, boardPos.y),
+		tileSize,
+		tileSize
+	);
+
+	if(coordWithinBoard(xCoord, yCoord)) {
+		globalContext.strokeRect(
+			getCoord(xCoord, boardPos.x),
+			getCoord(yCoord, boardPos.y),
+			tileSize,
+			tileSize
+		);
+	}
+}
+
+function displayInfo() {
+	let fontSize = 24;
+	let interLine = 7;
+	let horizontalGap = fontSize + interLine;
+	let bobText = '[Spacja] - Papiez w ';
+	
+	globalContext.font = `${fontSize}px Rubik`;
+
+	if(bobMoving) {
+		globalContext.fillStyle = 'green';
+		bobText += 'ruchu';
+	} else {
+		globalContext.fillStyle = 'orange';
+		bobText += 'spoczynku';
 	}
 
-	getCoord = (p, start) => {
-		return start + p * tileSize;
+	globalContext.fillText(bobText, 20, 50 + horizontalGap * 0);
+	
+	globalContext.fillStyle = 'orange';
+	let adviseText = [
+		'[A] - ustaw przeszkodę',
+		'[S] - ustaw Boba',
+		'[R] - reset planszy'
+	];
+	for(let i = 0; i < adviseText.length; i++) {
+		globalContext.fillText(adviseText[i], 20, 50 + horizontalGap * (i + 1));
 	}
-	getReverseCoord = (p, start) => {
-		return Math.floor((p - start) / tileSize);
-	}
-	coordWithinBoard = (x, y) => {
-		return 0 <= x && x < boardSize &&
-				0 <= y && y < boardSize;
-	}
+}
 
+function display(xCoord, yCoord) {
+	displayTiles();
+	displayObstacles(xCoord, yCoord);
+	displayBob(xCoord, yCoord);
+	displayInfo();
+}
 
-	// set coords
-	let xCoord = getReverseCoord(Mouse.x, boardPos.x);
-	let yCoord = getReverseCoord(Mouse.y, boardPos.y);
-
+function logic(xCoord, yCoord) {
 	// set obstacles
 	if(Key.isDown(Key.code.a) || Mouse.clicked) {
 		/*if(!aClicked)*/ {
@@ -352,66 +414,27 @@ function mainLoop(time) {
 	// kinda messy boilerplate
 	if(Key.isDown(Key.code.n)) {
 		let size = 4;
-		for(let x = xCoord - size; x <= xCoord + size; x++) {
-			if(coordWithinBoard(x, yCoord)) {
-				if(board[yCoord][x] !== undefined) {
-					if(!(x == bobPos.x && yCoord == bobPos.y)) {
-						board[yCoord][x] = 1;
-					}
-				}
-			}
-		}
-		for(let y = yCoord - size; y <= yCoord + size; y++) {
-			if(coordWithinBoard(xCoord, y)) {
-				if(board[y][xCoord] !== undefined) {
-					if(!(xCoord == bobPos.x && y == bobPos.y)) {
-						board[y][xCoord] = 1;
-					}
-				}
-			}
-		}
+		let drawingFormula = (x, y) => {
+			return x === xCoord || x === yCoord;
+		};
 
 
-		for(let x = xCoord - size; x < xCoord; x++) {
-			if(coordWithinBoard(x, yCoord + size)) {
-				if(board[yCoord + size][x] !== undefined) {
-					if(!(x == bobPos.x && yCoord + size == bobPos.y)) {
-						board[yCoord + size][x] = 1;
+		for(let x = -size; x <= size; x++) {
+			for(let y = - size; y <= size; y++) {
+				let xDrawing = x + xCoord;
+				let yDrawing = y + yCoord;
+				if(coordWithinBoard(xDrawing, yDrawing)) {
+					if(board[yDrawing][xDrawing] !== undefined) {
+						if(!(xDrawing === bobPos.x && yDrawing === bobPos.y)) {
+							if(drawingFormula) {
+								board[yDrawing][xDrawing] = 1;
+							}
+						}
 					}
 				}
 			}
 		}
-		for(let y = yCoord - size; y < xCoord; y++) {
-			if(coordWithinBoard(xCoord - size, y)) {
-				if(board[y][xCoord - size] !== undefined) {
-					if(!(xCoord - size == bobPos.x && y == bobPos.y)) {
-						board[y][xCoord - size] = 1;
-					}
-				}
-			}
-		}
-
-		/*
-		for(let x = xCoord; x <= xCoord + size; x++) {
-			if(coordWithinBoard(x, yCoord + size)) {
-				if(board[yCoord + size][x] !== undefined) {
-					if(!(x == bobPos.x && yCoord + size == bobPos.y)) {
-						//board[yCoord - size][x] = 1;
-					}
-				}
-			}
-		}
-		/*for(let y = yCoord; y < xCoord + size; y++) {
-			if(coordWithinBoard(xCoord + size, y)) {
-				if(board[y][xCoord + size] !== undefined) {
-					if(!(xCoord + size == bobPos.x && y == bobPos.y)) {
-						board[y][xCoord + size] = 1;
-					}
-				}
-			}
-		}*/
 	}
-
 
 	// bob movement
 	if(bobMoving) {
@@ -434,81 +457,33 @@ function mainLoop(time) {
 					bobActualMove = 0;
 					bobMoving = false;
 				}
-				//bobActualMove %= bobVelocities.length;
 			}
 		}
 	}
+}
 
-	// draw tiles
-	for(let y = 0; y < boardSize; y++) {
-		for(let x = 0; x < boardSize; x++) {
-			let destX = getCoord(x, boardPos.x);
-			let destY = getCoord(y, boardPos.y);
-			globalContext.drawImage(images.tile, destX, destY, tileSize, tileSize);
-		}
-	}
-	// draw obstacles
-	for(let y = 0; y < boardSize; y++) {
-		for(let x = 0; x < boardSize; x++) {
-			if(board[y][x] === 1) {
-				let destX = getCoord(x, boardPos.x) + getRandInt(-1, 1);
-				let destY = getCoord(y, boardPos.y) + getRandInt(-2, 2);
-				globalContext.drawImage(images.dizzy, destX, destY, tileSize, tileSize);
-			}
-		}
+function mainLoop(time) {
+	// Frame timing
+	frameTime = time - lastFrameTime;
+	lastFrameTime = time;
+
+	// Debug draw stuff
+	clearCanvas();
+	if(frameUpdateClock.getElapsedTime() > 1.0) {
+		displayedFrameTime = frameTime;
+		frameUpdateClock.reset();
 	}
 
-	// draw bob
-	globalContext.drawImage(
-		images.bob,
-		getCoord(bobPos.x, boardPos.x),
-		getCoord(bobPos.y, boardPos.y),
-		tileSize,
-		tileSize
-	);
+	// set coords
+	let xCoord = getReverseCoord(Mouse.x, boardPos.x);
+	let yCoord = getReverseCoord(Mouse.y, boardPos.y);
 
-	if(coordWithinBoard(xCoord, yCoord)) {
-		globalContext.strokeRect(
-			getCoord(xCoord, boardPos.x),
-			getCoord(yCoord, boardPos.y),
-			tileSize,
-			tileSize
-		);
-	}
+	logic(xCoord, yCoord);
 
-
-	let fontSize = 30;
-	let interLine = 7;
-	let horizontalGap = fontSize + interLine;
-	let bobText = '[Spacja] - Bob w ';
-	
-	globalContext.font = `${fontSize}px Rubik`;
-
-	if(bobMoving) {
-		globalContext.fillStyle = 'green';
-		bobText += '🤗ruchu';
-	} else {
-		globalContext.fillStyle = 'orange';
-		bobText += '😴spoczynku';
-	}
-
-	globalContext.fillText(bobText, 20, 50 + horizontalGap * 0);
-	
-	globalContext.fillStyle = 'orange';
-	let adviseText = [
-		'[A] - ustaw przeszkodę',
-		'[S] - ustaw Boba',
-		'[R] - reset planszy'
-	];
-	for(let i = 0; i < adviseText.length; i++) {
-		globalContext.fillText(adviseText[i], 20, 50 + horizontalGap * (i + 1));
-	}
-
+	display(xCoord, yCoord);
 
 	requestAnimationFrame(mainLoop);
 }
-
-// Main code
 
 init();
 mainLoop();
