@@ -336,7 +336,7 @@ function displayInfo() {
 	let fontSize = 24;
 	let interLine = 7;
 	let horizontalGap = fontSize + interLine;
-	let bobText = '[Spacja] - Papiez w ';
+	let bobText = '[Spacja] - Bob w ';
 	
 	globalContext.font = `${fontSize}px Rubik`;
 
