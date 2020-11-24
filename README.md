@@ -1,4 +1,4 @@
-# bobthebuilder
+# Bob the builder
 
 Little visualisation tool where you can play with Bob and Dizzies
 
